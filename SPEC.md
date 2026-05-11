@@ -7,7 +7,8 @@ Aplicação mobile e backend para gestão de lançamentos financeiros. O sistema
 ### 1.1 Stack Tecnológico
 
 - **Frontend**: Flutter (Multi-plataforma: iOS, Android, Web, Windows, macOS, Linux)
-- **Backend**: Node.js com Fastify
+- **Frontend HTTP Client**: Dio com interceptors (auth, refresh token silencioso, logs e loading global)
+- **Backend**: Node.js com Fastify + Swagger/OpenAPI
 - **Banco de Dados**: PostgreSQL (recomendado) ou MongoDB
 - **Arquitetura de Comunicação**: REST API
 
@@ -30,6 +31,7 @@ api/
 │   ├── middleware/
 │   ├── utils/
 │   └── types/
+├── docs/ (gerado via Swagger/OpenAPI)
 ├── tests/
 └── package.json
 ```
@@ -58,6 +60,7 @@ app/lib/
 │   ├── models/          # DTOs (financial_dto)
 │   ├── repositories/    # Implementação concreta
 │   ├── services/        # Implementação de requisições HTTP
+│   ├── network/         # DioClient, interceptors, token store, exceções
 │   └── datasources/     # Fonte de dados (API/Cache)
 ├── ui/
 │   ├── core/            # Widgets reutilizáveis
@@ -78,6 +81,9 @@ app/lib/
 - **Repository Pattern**: Abstração de acesso a dados
 - **Service Layer**: Lógica de negócio isolada
 - **DTO Pattern**: Data Transfer Objects para serialização
+- **Centralized HTTP Client**: DioClient com BaseOptions e interceptors globais
+- **Silent Refresh**: Renovação automática de access token ao receber 401
+- **Exception Mapping**: DioException mapeada para exceções de domínio da camada data
 
 ---
 
@@ -269,7 +275,23 @@ http://localhost:3000/api/v1
 | GET | `/financial/:id` | Obter detalhes do lançamento | Requerida |
 | PATCH | `/financial/:id/status` | Atualizar status | Requerida |
 
-### 5.3 Exemplos de Requisições
+### 5.3 Endpoints de Autenticação Técnica (Ambiente de Desenvolvimento)
+
+| Método | Endpoint | Descrição | Autenticação |
+|--------|----------|-----------|--------------|
+| GET | `/auth/dev-token` | Gera access token e refresh token para ambiente local | Não |
+| POST | `/auth/refresh` | Renova access token a partir de refresh token | Não |
+
+### 5.4 Documentação Swagger/OpenAPI
+
+- **Swagger UI**: `http://localhost:3000/docs`
+- **Spec OpenAPI JSON**: `http://localhost:3000/docs/json`
+- A documentação inclui:
+  - Schemas de request/response dos endpoints financeiros
+  - Segurança `bearerAuth`
+  - Tags por domínio (`auth`, `financial`)
+
+### 5.5 Exemplos de Requisições
 
 #### Criar Lançamento
 ```http
@@ -314,12 +336,30 @@ State Management (Provider/Riverpod)
     ↓
 Repository Layer
     ↓
-Service Layer (HTTP Client)
+Service Layer
+  ↓
+DioClient (BaseOptions + Interceptors)
+  ↓
+Auth Interceptor (Bearer + Silent Refresh)
+  ↓
+Pretty Logger Interceptor
     ↓
 Data Models (DTO)
     ↓
 API Backend
 ```
+
+### 6.1.1 Diretrizes do Cliente HTTP (Best Practices)
+
+- Não instanciar `Dio()` dentro de Repository/ViewModel.
+- Toda configuração de rede deve existir em um cliente central (`DioClient`).
+- `BaseOptions` obrigatórios: `baseUrl`, `connectTimeout`, `receiveTimeout`, `sendTimeout`, headers padrão.
+- Interceptors obrigatórios:
+  - **Auth Interceptor**: injeta bearer token automaticamente.
+  - **Refresh Interceptor**: ao receber 401, tenta renovar token e repete a requisição original.
+  - **Log Interceptor**: logs de request/response para debug local.
+  - **Loading Interceptor**: sinaliza estado global de carregamento para UI.
+- Exceções de rede devem ser mapeadas para classes próprias (`NetworkException`, `ServerException`, etc.).
 
 ### 6.2 Telas da Aplicação
 
@@ -366,6 +406,7 @@ Usar Provider ou Riverpod para:
 - **Erros HTTP**: Mapear status codes para mensagens user-friendly
 - **Validação**: Exibir mensagens em real-time nos campos
 - **Offline**: Implementar fallback para modo offline (futuro)
+- **Camada Data**: Nunca propagar `DioException` diretamente para UI/Domain
 
 ---
 
@@ -1117,8 +1158,25 @@ Usuário vê lista filtrada
 - **Autenticação**: JWT token obrigatório em todos endpoints
 - **Autorização**: Usuário só acessa seus próprios lançamentos
 - **Validação**: Validar e sanitizar entrada no backend
+- **Refresh Token**: Renovação de access token transparente para o usuário
 - **HTTPS**: Usar HTTPS em produção
 - **CORS**: Configurar CORS corretamente
+
+### 11.3 Desenvolvimento Seguro
+
+#### 11.3.1 Requisitos de Segurança Durante o Desenvolvimento
+
+- **Lint de segurança obrigatório**: Executar lint de segurança no backend (`api`) com regra de falha em qualquer alerta.
+- **Dependências sem vulnerabilidade**: Validar dependências com auditoria de segurança antes de merge/release.
+- **Sem legados**: Não utilizar métodos, funções, APIs ou infraestrutura legada/depreciada em código novo.
+- **Gate de qualidade**: PR só pode ser aprovado se lint de segurança e auditoria de dependências estiverem verdes.
+
+#### 11.3.2 Requisitos de Execução no Backend (`api`)
+
+- `npm run lint`: validação estática TypeScript.
+- `npm run lint:security`: lint de segurança (ESLint + plugin de segurança).
+- `npm run security:audit`: verificação de vulnerabilidades em dependências.
+- `npm run test:lint`: execução agregada obrigatória para validação de lint no backend.
 
 ---
 

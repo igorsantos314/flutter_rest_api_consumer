@@ -310,8 +310,13 @@ class DioClient {
           throw const UnauthorizedException('Access token invalido');
         }
 
-        // Armazena o novo token na token store
-        _tokenStore.setTokens(accessToken: newAccessToken);
+        // Armazena o novo token na token store com o mesmo userId
+        final userId = _tokenStore.userId;
+        if (userId == null || userId.isEmpty) {
+          throw const UnauthorizedException('UserId invalido');
+        }
+
+        _tokenStore.setTokens(userId: userId, accessToken: newAccessToken);
         // Notifica todos os que estavam aguardando que o refresh terminou com sucesso
         _refreshCompleter?.complete();
       } catch (_) {

@@ -47,13 +47,22 @@ class FinancialServiceImpl implements FinancialService {
 
       final accessToken = (data['accessToken'] ?? data['token']) as String?;
       final refreshToken = data['refreshToken'] as String?;
+      final userId = data['userId'] as String?;
+      
       if (accessToken == null || accessToken.isEmpty) {
         throw const FinancialServiceException(
           'Token de acesso nao retornado pela API',
         );
       }
 
+      if (userId == null || userId.isEmpty) {
+        throw const FinancialServiceException(
+          'UserId nao retornado pela API',
+        );
+      }
+
       _tokenStore.setTokens(
+        userId: userId,
         accessToken: accessToken,
         refreshToken: refreshToken,
       );

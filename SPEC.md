@@ -14,6 +14,144 @@ Aplicação mobile e backend para gestão de lançamentos financeiros. O sistema
 
 ---
 
+## 2. Autenticação e Segurança Multi-Tenant
+
+### 2.0 Princípios de Segurança
+
+**Regra Fundamental: Isolamento de Dados por Usuário**
+
+Cada usuário só pode acessar seus próprios dados. Essa regra é garantida em múltiplas camadas:
+
+1. **JWT Token**: O claim `sub` contém o userId do usuário autenticado
+2. **Backend**: Todos os endpoints de dados validam que o userId do token corresponde ao userId do recurso
+3. **Database**: Índices em `(userId, resourceId)` garantem isolamento eficiente
+4. **Frontend**: AuthTokenStore armazena userId para validações locais
+
+### 2.1 Fluxo de Autenticação
+
+```
+Usuário → Register/Login → Backend valida → JWT gerado com userId
+         ↓
+    Access Token armazenado com userId
+         ↓
+Requisições subsequentes adicionam Bearer token no header Authorization
+         ↓
+Middleware de autenticação valida JWT e extrai userId
+         ↓
+Todos os endpoints usam userId para filtrar dados
+```
+
+### 2.2 Endpoints de Autenticação
+
+#### 2.2.1 Registro de Usuário
+
+**POST /api/v1/auth/register**
+
+**Body**:
+```json
+{
+  "email": "user@example.com",
+  "password": "senhaSegura123"
+}
+```
+
+**Validações**:
+- Email deve ser formato válido
+- Senha mínimo 6 caracteres
+- Email não pode estar já registrado
+
+**Response (201)**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "createdAt": "ISO 8601"
+  },
+  "message": "Usuario registrado com sucesso"
+}
+```
+
+#### 2.2.2 Login de Usuário
+
+**POST /api/v1/auth/login**
+
+**Body**:
+```json
+{
+  "email": "user@example.com",
+  "password": "senhaSegura123"
+}
+```
+
+**Validações**:
+- Email deve existir
+- Senha deve corresponder ao hash armazenado
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "createdAt": "ISO 8601"
+    },
+    "accessToken": "JWT com type=access, expiração 15min",
+    "refreshToken": "JWT com type=refresh, expiração 7 dias",
+    "tokenType": "Bearer"
+  },
+  "message": "Login realizado com sucesso"
+}
+```
+
+#### 2.2.3 Renovação de Token
+
+**POST /api/v1/auth/refresh**
+
+**Body**:
+```json
+{
+  "refreshToken": "JWT com type=refresh"
+}
+```
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "novo JWT com type=access",
+    "tokenType": "Bearer"
+  },
+  "message": "Token renovado com sucesso"
+}
+```
+
+#### 2.2.4 Dev Token (Apenas Ambiente Local)
+
+**GET /api/v1/auth/dev-token**
+
+Gera tokens para testes locais sem fazer login real. Retorna accessToken e refreshToken com userId dev.
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "dev-user-123",
+    "accessToken": "JWT dev",
+    "refreshToken": "JWT dev",
+    "tokenType": "Bearer"
+  },
+  "message": "Token gerado com sucesso"
+}
+```
+
+---
+
 ## 2. Regras de Arquitetura
 
 ### 2.1 Estrutura de Pastas Backend
@@ -22,6 +160,10 @@ Aplicação mobile e backend para gestão de lançamentos financeiros. O sistema
 api/
 ├── src/
 │   ├── features/
+│   │   ├── auth/
+│   │   │   ├── routes.ts
+│   │   │   ├── service.ts
+│   │   │   └── repository.ts
 │   │   └── financial/
 │   │       ├── routes.ts
 │   │       ├── controller.ts
@@ -46,7 +188,7 @@ Cada camada é responsável por:
 - **Route**: Mapeamento de endpoint e validação inicial
 - **Controller**: Orquestração de requisição e resposta
 - **Service**: Lógica de negócio
-- **Repository**: Acesso a dados
+- **Repository**: Acesso a dados, **com filtro de userId**
 
 ### 2.3 Estrutura de Pastas Frontend (Flutter)
 
@@ -82,8 +224,9 @@ app/lib/
 - **Service Layer**: Lógica de negócio isolada
 - **DTO Pattern**: Data Transfer Objects para serialização
 - **Centralized HTTP Client**: DioClient com BaseOptions e interceptors globais
-- **Silent Refresh**: Renovação automática de access token ao receber 401
+- **Silent Refresh**: Renovação automática de access token ao receber 401 com retry
 - **Exception Mapping**: DioException mapeada para exceções de domínio da camada data
+- **Multi-Tenant Security**: Todos os dados filtrados por userId do JWT
 
 ---
 
@@ -94,6 +237,10 @@ app/lib/
 #### 3.1.1 Criar Lançamento Financeiro
 
 **Descrição**: Usuário deve ser capaz de criar um novo lançamento financeiro.
+
+**Autenticação**: Obrigatória (Bearer token com access type)
+
+**Segurança**: Lançamento será associado ao userId do token JWT
 
 **Dados de Entrada**:
 - `description` (string, obrigatório): Descrição da transação (máx 255 caracteres)
@@ -1155,12 +1302,17 @@ Usuário vê lista filtrada
 
 ### 11.2 Segurança
 
-- **Autenticação**: JWT token obrigatório em todos endpoints
-- **Autorização**: Usuário só acessa seus próprios lançamentos
+- **Autenticação**: JWT token obrigatório em todos endpoints (exceto register/login/dev-token)
+- **Autorização Multi-Tenant**: 
+  - Cada usuário só acessa seus próprios lançamentos
+  - Backend valida userId do token JWT em **todas** as operações de dados
+  - Repository filtra por userId para garantir isolamento
+  - Cliente nunca consegue acessar dados de outro usuário
 - **Validação**: Validar e sanitizar entrada no backend
-- **Refresh Token**: Renovação de access token transparente para o usuário
+- **Refresh Token**: Renovação de access token transparente para o usuário (retry automático em 401)
 - **HTTPS**: Usar HTTPS em produção
 - **CORS**: Configurar CORS corretamente
+- **Hash de Senha**: Senhas sempre armazenadas com hash criptográfico (não em plain text)
 
 ### 11.3 Desenvolvimento Seguro
 

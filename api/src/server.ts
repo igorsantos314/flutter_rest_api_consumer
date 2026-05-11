@@ -2,11 +2,18 @@ import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
+import fastifyCors from '@fastify/cors';
+import { authRoutes } from './features/auth/routes';
 import { financialRoutes } from './features/financial/routes';
 import { AppError } from './utils/errors';
 
 export function buildServer() {
   const app = Fastify({ logger: true });
+
+  // Habilita CORS para permitir requisições do frontend
+  app.register(fastifyCors, {
+    origin: true, // Permite requisições de qualquer origem em dev
+  });
 
   app.register(fastifySwagger, {
     openapi: {
@@ -67,7 +74,7 @@ export function buildServer() {
     {
       schema: {
         tags: ['auth'],
-        summary: 'Gera access token e refresh token para ambiente local',
+        summary: 'Gera access token e refresh token para ambiente local (dev only)',
         response: {
           200: {
             type: 'object',
@@ -76,11 +83,12 @@ export function buildServer() {
               data: {
                 type: 'object',
                 properties: {
+                  userId: { type: 'string' },
                   accessToken: { type: 'string' },
                   refreshToken: { type: 'string' },
                   tokenType: { type: 'string' },
                 },
-                required: ['accessToken', 'refreshToken', 'tokenType'],
+                required: ['userId', 'accessToken', 'refreshToken', 'tokenType'],
               },
               message: { type: 'string' },
             },
@@ -90,13 +98,14 @@ export function buildServer() {
       },
     },
     async () => {
-      const payload = { sub: 'dev-user', type: 'access' as const };
+      const devUserId = 'dev-user-123';
+      const payload = { sub: devUserId, type: 'access' as const };
       const accessToken = app.jwt.sign(payload, { expiresIn: '15m' });
-      const refreshToken = app.jwt.sign({ sub: 'dev-user', type: 'refresh' as const }, { expiresIn: '7d' });
+      const refreshToken = app.jwt.sign({ sub: devUserId, type: 'refresh' as const }, { expiresIn: '7d' });
 
       return {
         success: true,
-        data: { accessToken, refreshToken, tokenType: 'Bearer' },
+        data: { userId: devUserId, accessToken, refreshToken, tokenType: 'Bearer' },
         message: 'Token gerado com sucesso',
       };
     },
@@ -188,8 +197,13 @@ export function buildServer() {
     },
   );
 
-  app.get('/docs/json', async () => app.swagger());
+  // Nota: /docs/json é registrada automaticamente por fastifySwaggerUi
+  // Não precisa declarar manualmente, pois evita duplicação de rota
 
+  // Registra rotas de autenticação (register/login)
+  app.register(authRoutes, { prefix: '/api/v1/auth' });
+
+  // Registra rotas financeiras (com proteção de auth)
   app.register(financialRoutes, { prefix: '/api/v1' });
 
   return app;

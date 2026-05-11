@@ -58,8 +58,10 @@ class FinancialViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<FinancialModel>():
         await loadFinancials.execute();
+        notifyListeners(); // Notify listeners on success
         return Result.ok(result.value);
       case Error<FinancialModel>():
+        notifyListeners(); // Notify listeners on failure
         return Result.error(result.error);
     }
   }

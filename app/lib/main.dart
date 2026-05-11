@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_rest_api_consumer/data/repositories/auth_repository_impl.dart';
 import 'package:flutter_rest_api_consumer/data/network/auth_token_store.dart';
 import 'package:flutter_rest_api_consumer/data/network/dio_client.dart';
 import 'package:flutter_rest_api_consumer/data/network/network_activity_notifier.dart';
 import 'package:flutter_rest_api_consumer/data/repositories/financial_repository_impl.dart';
+import 'package:flutter_rest_api_consumer/data/services/auth_service_impl.dart';
 import 'package:flutter_rest_api_consumer/data/services/financial_service_impl.dart';
+import 'package:flutter_rest_api_consumer/domain/repositories/auth_repository.dart';
 import 'package:flutter_rest_api_consumer/domain/repositories/financial_repository.dart';
+import 'package:flutter_rest_api_consumer/domain/services/auth_service.dart';
 import 'package:flutter_rest_api_consumer/domain/services/financial_service.dart';
+import 'package:flutter_rest_api_consumer/ui/auth/view_models/auth_view_model.dart';
+import 'package:flutter_rest_api_consumer/ui/auth/widgets/auth_screen.dart';
 import 'package:flutter_rest_api_consumer/ui/financial/view_models/financial_view_model.dart';
 import 'package:flutter_rest_api_consumer/ui/financial/widgets/financial_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
-
+ 
 void main() {
   runApp(const MainApp());
 }
@@ -23,7 +29,7 @@ class MainApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         Provider<Dio>(create: (_) => Dio()),
-        Provider<AuthTokenStore>(create: (_) => AuthTokenStore()),
+        ChangeNotifierProvider<AuthTokenStore>(create: (_) => AuthTokenStore()),
         ChangeNotifierProvider<NetworkActivityNotifier>(
           create: (_) => NetworkActivityNotifier(),
         ),
@@ -34,10 +40,26 @@ class MainApp extends StatelessWidget {
             networkActivity: context.read<NetworkActivityNotifier>(),
           ),
         ),
+        Provider<AuthService>(
+          create: (context) => AuthServiceImpl(
+            dioClient: context.read<DioClient>(),
+            tokenStore: context.read<AuthTokenStore>(),
+          ),
+        ),
+        Provider<AuthRepository>(
+          create: (context) => AuthRepositoryImpl(
+            service: context.read<AuthService>(),
+          ),
+        ),
+        ChangeNotifierProvider<AuthViewModel>(
+          create: (context) => AuthViewModel(
+            repository: context.read<AuthRepository>(),
+            tokenStore: context.read<AuthTokenStore>(),
+          ),
+        ),
         Provider<FinancialService>(
           create: (context) => FinancialServiceImpl(
             dioClient: context.read<DioClient>(),
-            tokenStore: context.read<AuthTokenStore>(),
           ),
         ),
         Provider<FinancialRepository>(
@@ -57,26 +79,42 @@ class MainApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E5AA8)),
           useMaterial3: true,
         ),
-        home: Stack(
-          children: [
-            const FinancialScreen(),
-            Consumer<NetworkActivityNotifier>(
-              builder: (context, activity, _) {
-                if (!activity.isLoading) {
-                  return const SizedBox.shrink();
-                }
-
-                return IgnorePointer(
-                  child: ColoredBox(
-                    color: Colors.black12,
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+        home: const _AppShell(),
       ),
+    );
+  }
+}
+
+class _AppShell extends StatelessWidget {
+  const _AppShell();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Consumer<AuthViewModel>(
+          builder: (context, authViewModel, _) {
+            if (authViewModel.isAuthenticated) {
+              return const FinancialScreen();
+            }
+            return const AuthScreen();
+          },
+        ),
+        Consumer<NetworkActivityNotifier>(
+          builder: (context, activity, _) {
+            if (!activity.isLoading) {
+              return const SizedBox.shrink();
+            }
+
+            return IgnorePointer(
+              child: ColoredBox(
+                color: Colors.black12,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

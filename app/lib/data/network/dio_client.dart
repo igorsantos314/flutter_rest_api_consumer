@@ -66,7 +66,7 @@ class DioClient {
     // 3. Determinar se a requisição precisa de autenticação
     _dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (options, handler) {
+        onRequest: (options, handler) async {
           // Verifica se o usuário quer pular o indicador de loading (ex: auth/dev-token)
           final skipLoader = options.extra['skipGlobalLoader'] == true;
           if (!skipLoader) {
@@ -77,6 +77,12 @@ class DioClient {
           // Verifica se esta requisição precisa de autenticação
           // Por padrão, precisa (requiresAuth = true)
           final requiresAuth = options.extra['requiresAuth'] != false;
+          if (requiresAuth &&
+              _tokenStore.hasAccessToken &&
+              _tokenStore.isAccessTokenExpired) {
+            await _refreshAccessToken();
+          }
+
           if (requiresAuth && _tokenStore.hasAccessToken) {
             // Adiciona o token JWT no header Authorization
             options.headers['Authorization'] =
@@ -272,18 +278,59 @@ class DioClient {
   Future<Response<dynamic>?> _retryWithRefresh(
     RequestOptions requestOptions,
   ) async {
-    // Se não tem refresh token, não consegue renovar
-    // Limpa os tokens e retorna null para rejeitar a requisição original
+    final refreshed = await _refreshAccessToken();
+    if (!refreshed) {
+      return null;
+    }
+
+    // Verifica se conseguiu renovar o token (alguém no fluxo acima armazenou um novo)
+    if (!_tokenStore.hasAccessToken) {
+      return null;
+    }
+
+    // Prepara a requisição original para ser refeita com o novo token
+    final headers = Map<String, dynamic>.from(requestOptions.headers);
+    headers['Authorization'] = 'Bearer ${_tokenStore.accessToken}';
+
+    final retryOptions = Options(
+      method: requestOptions.method,
+      headers: headers,
+      responseType: requestOptions.responseType,
+      contentType: requestOptions.contentType,
+      // Define retryAfterRefresh como false para não tentar refresh novamente
+      extra: {...requestOptions.extra, 'retryAfterRefresh': false},
+    );
+
+    // Faz a requisição original novamente, agora com o novo token
+    return _dio.request<dynamic>(
+      requestOptions.path,
+      data: requestOptions.data,
+      queryParameters: requestOptions.queryParameters,
+      options: retryOptions,
+    );
+  }
+
+  Future<bool> _refreshAccessToken() async {
+    // Se nao tem refresh token, nao consegue renovar.
     final refreshToken = _tokenStore.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) {
       _tokenStore.clear();
-      return null;
+      return false;
+    }
+
+    if (_tokenStore.isRefreshTokenExpired) {
+      _tokenStore.clear();
+      return false;
     }
 
     if (_isRefreshing) {
       // Se outro refresh já está em andamento, aguarda seu resultado
       // Isso evita múltiplas requisições de refresh simultâneas
-      await _refreshCompleter?.future;
+      try {
+        await _refreshCompleter?.future;
+      } catch (_) {
+        return false;
+      }
     } else {
       // Marca que agora este código é responsável pelo refresh
       _isRefreshing = true;
@@ -325,37 +372,14 @@ class DioClient {
         _tokenStore.clear();
         // Notifica que o refresh falhou
         _refreshCompleter?.completeError(const UnauthorizedException());
+        return false;
       } finally {
         // Marca que ninguém mais está fazendo refresh
         _isRefreshing = false;
       }
     }
 
-    // Verifica se conseguiu renovar o token (alguém no fluxo acima armazenou um novo)
-    if (!_tokenStore.hasAccessToken) {
-      return null;
-    }
-
-    // Prepara a requisição original para ser refeita com o novo token
-    final headers = Map<String, dynamic>.from(requestOptions.headers);
-    headers['Authorization'] = 'Bearer ${_tokenStore.accessToken}';
-
-    final retryOptions = Options(
-      method: requestOptions.method,
-      headers: headers,
-      responseType: requestOptions.responseType,
-      contentType: requestOptions.contentType,
-      // Define retryAfterRefresh como false para não tentar refresh novamente
-      extra: {...requestOptions.extra, 'retryAfterRefresh': false},
-    );
-
-    // Faz a requisição original novamente, agora com o novo token
-    return _dio.request<dynamic>(
-      requestOptions.path,
-      data: requestOptions.data,
-      queryParameters: requestOptions.queryParameters,
-      options: retryOptions,
-    );
+    return _tokenStore.hasAccessToken;
   }
 
   /// ==================== MAPEAMENTO DE ERROS ====================

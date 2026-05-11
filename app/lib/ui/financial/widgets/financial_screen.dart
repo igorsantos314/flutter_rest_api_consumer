@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_rest_api_consumer/domain/models/financial_model.dart';
+import 'package:flutter_rest_api_consumer/ui/auth/view_models/auth_view_model.dart';
 import 'package:flutter_rest_api_consumer/ui/financial/view_models/financial_view_model.dart';
 import 'package:flutter_rest_api_consumer/utils/result.dart';
 import 'package:intl/intl.dart';
@@ -33,6 +34,10 @@ class _FinancialScreenState extends State<FinancialScreen> {
           IconButton(
             onPressed: () => viewModel.refresh(),
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            onPressed: () => context.read<AuthViewModel>().logout.execute(),
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),

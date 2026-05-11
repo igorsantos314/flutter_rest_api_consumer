@@ -10,28 +10,10 @@ class FinancialRepositoryImpl implements FinancialRepository {
   final FinancialService _service;
 
   @override
-  Future<Result<void>> ensureAuthenticated() async {
-    try {
-      await _service.bootstrapAuthSession();
-      return const Result.ok(null);
-    } on Exception catch (error) {
-      return Result.error(error);
-    }
-  }
-
-  @override
   Future<Result<PagedFinancialModel>> listFinancials(
     FinancialFilters filters,
   ) async {
     try {
-      final authResult = await ensureAuthenticated();
-      switch (authResult) {
-        case Error<void>():
-          return Result.error(authResult.error);
-        case Ok<void>():
-          break;
-      }
-
       final model = await _service.listFinancials(filters);
       return Result.ok(model);
     } on Exception catch (error) {
@@ -44,14 +26,6 @@ class FinancialRepositoryImpl implements FinancialRepository {
     CreateFinancialInput input,
   ) async {
     try {
-      final authResult = await ensureAuthenticated();
-      switch (authResult) {
-        case Error<void>():
-          return Result.error(authResult.error);
-        case Ok<void>():
-          break;
-      }
-
       final created = await _service.createFinancial(input);
       return Result.ok(created);
     } on Exception catch (error) {
@@ -62,14 +36,6 @@ class FinancialRepositoryImpl implements FinancialRepository {
   @override
   Future<Result<FinancialModel>> getFinancialById(String id) async {
     try {
-      final authResult = await ensureAuthenticated();
-      switch (authResult) {
-        case Error<void>():
-          return Result.error(authResult.error);
-        case Ok<void>():
-          break;
-      }
-
       final financial = await _service.getFinancialById(id);
       return Result.ok(financial);
     } on Exception catch (error) {
@@ -83,14 +49,6 @@ class FinancialRepositoryImpl implements FinancialRepository {
     FinancialStatus status,
   ) async {
     try {
-      final authResult = await ensureAuthenticated();
-      switch (authResult) {
-        case Error<void>():
-          return Result.error(authResult.error);
-        case Ok<void>():
-          break;
-      }
-
       final updated = await _service.updateFinancialStatus(id, status);
       return Result.ok(updated);
     } on Exception catch (error) {

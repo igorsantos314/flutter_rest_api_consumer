@@ -508,9 +508,37 @@ API Backend
   - **Loading Interceptor**: sinaliza estado global de carregamento para UI.
 - Exceções de rede devem ser mapeadas para classes próprias (`NetworkException`, `ServerException`, etc.).
 
+### 6.1.2 Regra de Negócio de Autenticação JWT no App Flutter
+
+- O app Flutter deve possuir fluxo de autenticação completo com login e registro antes do acesso aos dados financeiros.
+- Após login/registro com sucesso, o app deve armazenar `accessToken`, `refreshToken`, `tokenType`, `userId` e metadados de expiração em storage seguro.
+- O `accessToken` deve ser enviado automaticamente no header `Authorization` em todas as chamadas autenticadas.
+- Quando o `accessToken` expirar (ou ao receber 401), o app deve tentar refresh silencioso via `/auth/refresh` usando o `refreshToken`.
+- Em caso de refresh bem-sucedido, o app deve atualizar token em memória/storage e repetir a requisição original uma única vez.
+- Em caso de falha no refresh (refresh expirado/inválido), o app deve limpar sessão local, invalidar estado autenticado e redirecionar para a tela de login.
+- O endpoint `/auth/dev-token` pode ser usado apenas em ambiente local para acelerar testes manuais.
+
 ### 6.2 Telas da Aplicação
 
-#### 6.2.1 Tela de Lista de Lançamentos
+#### 6.2.1 Tela de Login
+- **Widget**: `LoginScreen`
+- **Funcionalidades**:
+  - Formulário com email e senha
+  - Validação em tempo real (email válido, senha mínima)
+  - Botão de login com estado de loading
+  - Link para tela de registro
+  - Tratamento de erro de autenticação com mensagem amigável
+
+#### 6.2.2 Tela de Registro
+- **Widget**: `RegisterScreen`
+- **Funcionalidades**:
+  - Formulário com email e senha
+  - Validação em tempo real (email válido, senha mínima)
+  - Ação de criar conta via `/auth/register`
+  - Após sucesso, fluxo de autenticação automática (ou redirecionamento para login, conforme estratégia definida)
+  - Link para tela de login
+
+#### 6.2.3 Tela de Lista de Lançamentos
 - **Widget**: `FinancialListScreen`
 - **Funcionalidades**:
   - Exibição paginada de lançamentos
@@ -521,7 +549,7 @@ API Backend
   - Pull-to-refresh
   - Estados de carregamento, erro e vazio
 
-#### 6.2.2 Tela de Criação/Edição de Lançamento
+#### 6.2.4 Tela de Criação/Edição de Lançamento
 - **Widget**: `FinancialFormScreen`
 - **Funcionalidades**:
   - Formulário com validação em tempo real
@@ -532,7 +560,7 @@ API Backend
   - Botão de salvar com loading
   - Feedback de sucesso/erro
 
-#### 6.2.3 Tela de Detalhes de Lançamento
+#### 6.2.5 Tela de Detalhes de Lançamento
 - **Widget**: `FinancialDetailScreen`
 - **Funcionalidades**:
   - Exibição de dados completos
@@ -543,6 +571,8 @@ API Backend
 ### 6.3 State Management
 
 Usar Provider ou Riverpod para:
+- Gerenciar estado de autenticação (autenticado, não autenticado, sessão expirada)
+- Orquestrar fluxo de bootstrap da sessão (reidratar tokens e validar expiração na inicialização)
 - Gerenciar estado da lista (dados, loading, erro)
 - Gerenciar estado do formulário
 - Caching de dados
@@ -554,6 +584,7 @@ Usar Provider ou Riverpod para:
 - **Validação**: Exibir mensagens em real-time nos campos
 - **Offline**: Implementar fallback para modo offline (futuro)
 - **Camada Data**: Nunca propagar `DioException` diretamente para UI/Domain
+- **Autenticação**: Em falha de refresh token, forçar logout e redirecionar para login
 
 ---
 
@@ -1199,6 +1230,15 @@ Usuário vê lista filtrada
 - [ ] Backend confirma atualização
 - [ ] Lista reflete a mudança imediatamente
 - [ ] Mensagem de sucesso é exibida
+
+### Critério 4: Autenticação no Flutter
+- [ ] App exibe tela de login quando não há sessão válida
+- [ ] Usuário consegue registrar nova conta pela tela de registro
+- [ ] Usuário consegue autenticar com email/senha válidos
+- [ ] Access token é anexado automaticamente nas chamadas autenticadas
+- [ ] Quando access token expira, app tenta refresh silencioso automaticamente
+- [ ] Após refresh bem-sucedido, requisição original é repetida com sucesso
+- [ ] Em refresh inválido/expirado, app encerra sessão e retorna para login
 
 ---
 

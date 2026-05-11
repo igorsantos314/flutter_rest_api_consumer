@@ -1,5 +1,4 @@
 import 'package:flutter_rest_api_consumer/data/models/financial_dto.dart';
-import 'package:flutter_rest_api_consumer/data/network/auth_token_store.dart';
 import 'package:flutter_rest_api_consumer/data/network/dio_client.dart';
 import 'package:flutter_rest_api_consumer/data/network/api_exceptions.dart';
 import 'package:flutter_rest_api_consumer/domain/models/financial_model.dart';
@@ -16,63 +15,9 @@ class FinancialServiceException implements Exception {
 }
 
 class FinancialServiceImpl implements FinancialService {
-  FinancialServiceImpl({
-    required DioClient dioClient,
-    required AuthTokenStore tokenStore,
-  }) : _dioClient = dioClient,
-       _tokenStore = tokenStore;
+  FinancialServiceImpl({required DioClient dioClient}) : _dioClient = dioClient;
 
   final DioClient _dioClient;
-  final AuthTokenStore _tokenStore;
-
-  @override
-  Future<void> bootstrapAuthSession() async {
-    if (_tokenStore.hasAccessToken) {
-      return;
-    }
-
-    try {
-      final json = await _dioClient.get(
-        '/auth/dev-token',
-        requiresAuth: false,
-        skipGlobalLoader: true,
-      );
-
-      final data = json['data'];
-      if (data is! Map<String, dynamic>) {
-        throw const FinancialServiceException(
-          'Payload de autenticacao invalido',
-        );
-      }
-
-      final accessToken = (data['accessToken'] ?? data['token']) as String?;
-      final refreshToken = data['refreshToken'] as String?;
-      final userId = data['userId'] as String?;
-      
-      if (accessToken == null || accessToken.isEmpty) {
-        throw const FinancialServiceException(
-          'Token de acesso nao retornado pela API',
-        );
-      }
-
-      if (userId == null || userId.isEmpty) {
-        throw const FinancialServiceException(
-          'UserId nao retornado pela API',
-        );
-      }
-
-      _tokenStore.setTokens(
-        userId: userId,
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-      );
-    } on DioException catch (error) {
-      if (error.error is ApiException) {
-        throw FinancialServiceException((error.error as ApiException).message);
-      }
-      throw const FinancialServiceException('Falha ao autenticar no backend');
-    }
-  }
 
   @override
   Future<PagedFinancialModel> listFinancials(FinancialFilters filters) async {

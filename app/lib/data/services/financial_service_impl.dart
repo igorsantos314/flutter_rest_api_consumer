@@ -55,16 +55,22 @@ class FinancialServiceImpl implements FinancialService {
   @override
   Future<FinancialModel> createFinancial(CreateFinancialInput input) async {
     try {
+      final payload = <String, dynamic>{
+        'description': input.description,
+        'amount': input.amount,
+        'type': financialTypeToApi(input.type),
+        'category': input.category,
+        'date': _toApiDateTime(input.date),
+      };
+
+      final notes = input.notes;
+      if (notes != null && notes.trim().isNotEmpty) {
+        payload['notes'] = notes.trim();
+      }
+
       final json = await _dioClient.post(
         '/financial',
-        data: {
-          'description': input.description,
-          'amount': input.amount,
-          'type': financialTypeToApi(input.type),
-          'category': input.category,
-          'date': input.date.toIso8601String(),
-          'notes': input.notes,
-        },
+        data: payload,
       );
 
       return FinancialDto.fromJson(
@@ -114,5 +120,19 @@ class FinancialServiceImpl implements FinancialService {
     return FinancialServiceException(
       error.message ?? 'Falha na requisicao HTTP',
     );
+  }
+
+  String _toApiDateTime(DateTime value) {
+    final utc = DateTime.utc(
+      value.year,
+      value.month,
+      value.day,
+      value.hour,
+      value.minute,
+      value.second,
+      value.millisecond,
+      value.microsecond,
+    );
+    return utc.toIso8601String();
   }
 }

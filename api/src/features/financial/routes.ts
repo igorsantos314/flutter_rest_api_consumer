@@ -51,8 +51,9 @@ export async function financialRoutes(app: FastifyInstance): Promise<void> {
           amount: { type: 'number', minimum: 0.01 },
           type: { type: 'string', enum: ['INCOME', 'EXPENSE'] },
           category: { type: 'string' },
-          date: { type: 'string', format: 'date-time' },
-          notes: { type: 'string', maxLength: 500 },
+          // Date parsing/validation is handled in parseCreateFinancialInput.
+          date: { type: 'string' },
+          notes: { type: 'string', maxLength: 500, nullable: true },
         },
         required: ['description', 'amount', 'type', 'category', 'date'],
       },
@@ -85,8 +86,9 @@ export async function financialRoutes(app: FastifyInstance): Promise<void> {
           limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
           status: { type: 'string', enum: ['PENDING', 'COMPLETED', 'CANCELLED'] },
           type: { type: 'string', enum: ['INCOME', 'EXPENSE'] },
-          startDate: { type: 'string', format: 'date-time' },
-          endDate: { type: 'string', format: 'date-time' },
+          // Date parsing/validation is handled in parseListFinancialFilters.
+          startDate: { type: 'string' },
+          endDate: { type: 'string' },
           sortBy: { type: 'string', enum: ['date', 'amount', 'description'], default: 'date' },
           order: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' },
         },

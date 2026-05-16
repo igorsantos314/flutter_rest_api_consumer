@@ -26,7 +26,8 @@ class DioClient {
     required Dio dio,
     required AuthTokenStore tokenStore,
     required NetworkActivityNotifier networkActivity,
-    this.baseUrl = 'http://localhost:3000/api/v1',
+    // Base URL para acessar o localhost do PC com o emulador Android
+    this.baseUrl = 'http://10.0.2.2:3000/api/v1', 
   }) : _dio = dio,
        _tokenStore = tokenStore,
        _networkActivity = networkActivity,

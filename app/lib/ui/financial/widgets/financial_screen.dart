@@ -191,13 +191,31 @@ class _FinancialScreenState extends State<FinancialScreen> {
   }
 
   Future<void> _openCreateDialog(BuildContext context) async {
+    final formKey = GlobalKey<FormState>();
     final descriptionController = TextEditingController();
     final amountController = TextEditingController();
-    final categoryController = TextEditingController();
     final notesController = TextEditingController();
+
+    final incomeCategories = <String>[
+      'Salario',
+      'Freelance',
+      'Investimentos',
+      'Vendas',
+      'Reembolso',
+      'Outro',
+    ];
+    final expenseCategories = <String>[
+      'Moradia',
+      'Transporte',
+      'Alimentacao',
+      'Saude',
+      'Educacao',
+      'Outro',
+    ];
 
     FinancialType selectedType = FinancialType.expense;
     DateTime selectedDate = DateTime.now();
+    String? selectedCategory;
 
     await showDialog<void>(
       context: context,
@@ -207,75 +225,121 @@ class _FinancialScreenState extends State<FinancialScreen> {
           content: StatefulBuilder(
             builder: (context, setState) {
               return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: descriptionController,
-                      decoration: const InputDecoration(labelText: 'Descricao'),
-                    ),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: descriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'Descricao',
+                        ),
+                        validator: (value) =>
+                            (value == null || value.trim().isEmpty)
+                                ? 'Informe a descricao.'
+                                : null,
                       ),
-                      decoration: const InputDecoration(labelText: 'Valor'),
-                    ),
-                    TextField(
-                      controller: categoryController,
-                      decoration: const InputDecoration(labelText: 'Categoria'),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<FinancialType>(
-                      initialValue: selectedType,
-                      items: FinancialType.values
-                          .map(
-                            (type) => DropdownMenuItem<FinancialType>(
-                              value: type,
-                              child: Text(
-                                type == FinancialType.income
-                                    ? 'Receita'
-                                    : 'Despesa',
+                      TextFormField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(labelText: 'Valor'),
+                        validator: (value) {
+                          final parsed = double.tryParse(
+                            (value ?? '').replaceAll(',', '.'),
+                          );
+                          if (parsed == null || parsed <= 0) {
+                            return 'Informe um valor valido.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<FinancialType>(
+                        initialValue: selectedType,
+                        items: FinancialType.values
+                            .map(
+                              (type) => DropdownMenuItem<FinancialType>(
+                                value: type,
+                                child: Text(
+                                  type == FinancialType.income
+                                      ? 'Receita'
+                                      : 'Despesa',
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => selectedType = value);
-                        }
-                      },
-                      decoration: const InputDecoration(labelText: 'Tipo'),
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Data'),
-                      subtitle: Text(
-                        DateFormat('dd/MM/yyyy').format(selectedDate),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() {
+                            selectedType = value;
+                            final currentOptions =
+                                selectedType == FinancialType.income
+                                    ? incomeCategories
+                                    : expenseCategories;
+                            if (!currentOptions.contains(selectedCategory)) {
+                              selectedCategory = null;
+                            }
+                          });
+                        },
+                        decoration: const InputDecoration(labelText: 'Tipo'),
                       ),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime.now(),
-                          initialDate: selectedDate,
-                        );
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedCategory,
+                        items: (selectedType == FinancialType.income
+                                ? incomeCategories
+                                : expenseCategories)
+                            .map(
+                              (category) => DropdownMenuItem<String>(
+                                value: category,
+                                child: Text(category),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => selectedCategory = value),
+                        decoration: const InputDecoration(
+                          labelText: 'Categoria',
+                        ),
+                        validator: (value) => value == null
+                            ? 'Selecione uma categoria.'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Data'),
+                        subtitle: Text(
+                          DateFormat('dd/MM/yyyy').format(selectedDate),
+                        ),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime.now(),
+                            initialDate: selectedDate,
+                          );
 
-                        if (picked != null) {
-                          setState(() => selectedDate = picked);
-                        }
-                      },
-                    ),
-                    TextField(
-                      controller: notesController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas (opcional)',
+                          if (picked != null) {
+                            setState(() => selectedDate = picked);
+                          }
+                        },
                       ),
-                    ),
-                  ],
+                      TextFormField(
+                        controller: notesController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Notas (opcional)',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -287,20 +351,14 @@ class _FinancialScreenState extends State<FinancialScreen> {
             ),
             FilledButton(
               onPressed: () async {
+                final isValid = formKey.currentState?.validate() ?? false;
+                if (!isValid) {
+                  return;
+                }
                 final amount = double.tryParse(
                   amountController.text.replaceAll(',', '.'),
                 );
-                if (descriptionController.text.trim().isEmpty ||
-                    categoryController.text.trim().isEmpty ||
-                    amount == null ||
-                    amount <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Preencha os campos obrigatorios corretamente.',
-                      ),
-                    ),
-                  );
+                if (amount == null || selectedCategory == null) {
                   return;
                 }
 
@@ -310,7 +368,7 @@ class _FinancialScreenState extends State<FinancialScreen> {
                     description: descriptionController.text.trim(),
                     amount: amount,
                     type: selectedType,
-                    category: categoryController.text.trim(),
+                    category: selectedCategory ?? 'Outro',
                     date: selectedDate,
                     notes: notesController.text.trim().isEmpty
                         ? null
@@ -331,7 +389,6 @@ class _FinancialScreenState extends State<FinancialScreen> {
 
     descriptionController.dispose();
     amountController.dispose();
-    categoryController.dispose();
     notesController.dispose();
   }
 
